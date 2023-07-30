@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Dynamic Table</title>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+<style>
+
+html {
+	background-color: #999;
+}
+
+body {
+	height: 100%;
+	margin: 0px;
+}
+
+input {
+    padding: 0px;
+    border-style: none;
+    outline: none;
+    text-align: center;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+    outline: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.container.vertical {
+    flex-direction: column;
+}
+
+.container.horizontal {
+    flex-direction: row;
+}
+
+.atom {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    margin: 2px;
+}
+
+.atom.button {
+	cursor: pointer;
+}
+
+/******************** Table **********************/
+
+.table {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    justify-content: center;
+    margin: 10px; /* ? */
+}
+
+.table .header {
+    display: flex;
+    flex-direction: row;
+    font-weight: bold;
+    text-decoration: underline;
+    background-color: lightgrey;
+}
+
+.table .header .cell {
+	position: relative;
+}
+
+.table .row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    cursor: pointer;
+}
+
+.table .row:nth-child(odd) {
+    background-color: silver;
+}
+
+.table .row:nth-child(even) {
+    background-color: darkgrey;
+}
+
+.table .row:hover {
+    background-color: rgb(238 238 238);
+} 
+
+.table .row.selected {
+    background-color: rgb(238 238 238);
+}
+
+.table .header .cell,
+.table .row .cell {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 120px; /* Default cell width */
+    border: 1px solid black;
+}
+
+.table .row .cell {
+
+}
+
+.table .row .cell .atom {
+    margin: 0px;
+}
+
+.table .cell .atom.text {
+    align-self: stretch;
+    flex-grow: 1;
+}
+
+.table .cell .atom.text.simple input {
+    width: 100%;
+    height: 100%;
+    margin: 0px;
+    background-color: transparent;
+    font-family: serif;
+    font-size: 12pt;
+}
+
+.table .cell .atom.text.simple input:focus {
+    background-color: white;
+/*     background-color: ivory; */
+}
+
+.table .cell .atom.text.simple input.highlighted {
+    background-color: dodgerblue;
+}
+
+/******************** END: Table **********************/
+
+/******************** Special Spreadsheet Table **********************/
+
+.table .cell.delete {
+	width: 30px;
+}
+
+.table .header .cell.delete {
+	display: none;
+}
+
+.table .cell.delete .atom.button {
+    width: 100%;
+    height: 100%;
+    margin: 0px;
+}
+
+.table .cell.delete .atom.button:hover {
+	background-color: dimgrey;
+}
+
+.table .footer .cell.add {
+    background-color: gainsboro;
+}
+
+.table .footer .atom.button.add {
+    border: 1px solid black;
+    width: 120px;
+    height: 18px;
+    margin: 0px;
+    font-size: 20pt;
+    font-weight: bold;
+}
+
+.table .footer .atom.button.add span {
+	position: relative;
+	top: -1px;
+}
+
+.table .footer .atom.button.add:hover {
+	background-color: ghostwhite;
+}
+
+/******************** End: Special Spreadsheet Table **********************/
+
+
+/******************** Popup **********************/
+
+.popupSelection {
+    
+    top: 10px;
+    left: 100px;
+    
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+	width: 100px;
+    border: 1px solid black;
+    border-radius: 5px;
+    overflow: hidden;
+    z-index: 100;
+    background-color: darkgray;
+}
+
+.popupSelection .option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid black;
+    cursor: pointer;
+}
+
+.popupSelection .option:last-child {
+	border-bottom: none;
+}
+
+.popupSelection .option:hover {
+    background-color: gainsboro;
+}
+
+/******************** End: Popup **********************/
+
+</style>
+
+<script type="text/javascript">
+
+// TODO: Highlight by focus and clicking other input while holding 'shift' key.
+
+// TODO: Make highlight of area work beyond table. (Instead of needing to mouseover text input.)
+
+var tableData = [
+	{"Id": 1, "Name": "Owen", "Age": 26, "Phone": "204-378-5462", "Occupation": "Lecturer"},
+	{"Id": 2, "Name": "Harold", "Age": 29, "Phone": "172-634-9278", "Occupation": "Manager"},
+	{"Id": 3, "Name": "Albert", "Age": 51, "Phone": "647-247-0282", "Occupation": "Florist"},
+	{"Id": 4, "Name": "Ted", "Age": 34, "Phone": "142-916-5105", "Occupation": "Historian"},
+	{"Id": 5, "Name": "Rafael", "Age": 38, "Phone": "765-330-9377", "Occupation": "Hairdresser"},
+];
+
+$(document).ready(function() {
+	Table.initialize();
+});
+
+/************************* Framework ****************************/
+
+Table = {
+
+initialize: function() {
+	var tableElement = Table.buildTableFromData(tableData);
+	$(".dynamicTableContainer").append(tableElement);
+	Table.initializeEventHandlers();
+},
+
+initializeEventHandlers: function() {
+	Table.initializeButtonEventHandlers();
+	Table.initializeTextEventHandlers();
+	Table.initializeMenuEventHandlers();
+	
+	$(document).off("copy").on("copy", function(event) {
+		var data = Table.getStringOfHighlightedCells($(".table"))
+		event.originalEvent.clipboardData.setData("text/plain", data);
+		event.preventDefault();
+	});
+
+	$(document).off("paste").on("paste", function(event) {
+		var data = event.originalEvent.clipboardData.getData("text/plain");
+		Table.paste($(".table"), data);
+		event.preventDefault();
+	});
+},
+
+initializeButtonEventHandlers: function() {
+    $(".table .row .cell.delete .atom.button.delete").off().on("click", function(event) {
+        var sourceAtomElement = $(this);
+        var rowElement = sourceAtomElement.closest(".row");
+        rowElement.remove();
+        event.stopPropagation();
+    });
+    
+    $(".table .footer .cell.add .atom.button.add").off().on("click", function(event) {
+        var sourceAtomElement = $(this);
+        var tableElement = sourceAtomElement.closest(".table");
+        var rowElement = tableElement.find(".row").last();
+        var newRowElement = rowElement.clone();
+        newRowElement.insertAfter(rowElement);
+        Table.initializeEventHandlers();
+        event.stopPropagation();
+    });
+},
+
+isCurrentlyMovingCellByKey: false,
+
+isCurrentlyMovingMouseWhileDown: false,
+mouseDownX: null,
+mouseDownY: null,
+mouseDownTextInput: null,
+isCurrentlySelectingCellArea: false,
+
+initializeTextEventHandlers: function() {
+	$(".table .cell .atom.text.simple input").off();
+	
+	$(".table .cell .atom.text.simple input").on("focus", function(event) {
+		var textInputElement = $(this);
+		textInputElement.select();
+		var rowElement = textInputElement.closest(".row");
+		var tableElement = rowElement.closest(".table");
+		tableElement.find(".row.selected").removeClass("selected");
+		rowElement.addClass("selected");
+        event.stopPropagation();
+    });
+	
+	$(".table .cell .atom.text.simple input").on("keydown", function(event) {
+        var sourceAtomElement = $(this).closest(".atom"); 
+        var textInput = this;
+        
+        Table.isCurrentlyMovingCellByKey = false;
+        
+        if (event.keyCode == 13) { // Enter key
+
+        } else if (event.keyCode == 37) { // Left key
+        	if (textInput.selectionStart == textInput.selectionEnd && textInput.selectionStart == 0) {
+        		Table.focusPreviousTextInputInTable(textInput);
+        	}
+        } else if (event.keyCode == 38) { // Up key
+            Table.focusAboveTextInputInTable(textInput);
+        } else if (event.keyCode == 39) { // Right key
+        	if (textInput.selectionStart == textInput.selectionEnd && textInput.selectionStart == textInput.value.length) {
+        		Table.focusNextTextInputInTable(textInput);
+        	}
+        } else if (event.keyCode == 40) { // Down key
+            Table.focusBelowTextInputInTable(textInput);
+        }
+        
+        event.stopPropagation();
+    });
+
+	$(".table .cell .atom.text.simple input").on("keyup", function(event) {
+        var textInput = $(this);
+		if (Table.isCurrentlyMovingCellByKey) {
+			textInput.select();
+		}
+		Table.isCurrentlyMovingCellByKey = false;
+	});
+	
+	
+	
+	$(".table .cell .atom.text.simple input").on("mousedown", function(event) {
+        var textInput = $(this);
+        //textInput.addClass("highlighted");
+        Table.isCurrentlyMovingMouseWhileDown = true;
+        Table.mouseDownX = event.pageX;
+        Table.mouseDownY = event.pageY;
+        Table.mouseDownTextInput = textInput;
+        
+        Table.setupCellAreaSelectingMouseMovingEventHandlers();
+
+		console.log("mousedown");
+
+		textInput.focus();
+		var tableElement = Table.mouseDownTextInput.closest(".table");
+		tableElement.find(".cell input.highlighted").removeClass("highlighted");
+			
+		//event.stopPropagation();
+		event.preventDefault();
+	});
+	
+},
+
+setupCellAreaSelectingMouseMovingEventHandlers: function() {
+	
+	$(window).on("mousemove", function(event) {
+		if (!Table.isCurrentlyMovingMouseWhileDown) {
+			return;
+		}
+		
+		var x = event.pageX;
+		var y = event.pageY;
+		var deltaX = x - Table.mouseDownX;
+		var deltaY = y - Table.mouseDownY;
+		
+		var delta = Math.sqrt(Math.pow(deltaX, 2) + Math.pow(deltaY, 2));
+		
+		if (!Table.isCurrentlySelectingCellArea && delta >= 3) {
+			Table.isCurrentlySelectingCellArea = true;
+			var tableElement = Table.mouseDownTextInput.closest(".table");
+			var focusedTextInput = tableElement.find(".cell input:focus");
+			focusedTextInput.blur();
+			tableElement.find(".row.selected").removeClass("selected");
+		}
+	});
+
+	$(window).on("mouseup", function(event) {
+		if (!Table.isCurrentlyMovingMouseWhileDown) {
+			return;
+		}
+		
+		var x = event.pageX;
+		var y = event.pageY;
+		
+		Table.isCurrentlyMovingMouseWhileDown = false;
+		Table.isCurrentlySelectingCellArea = false;
+		Table.tearDownCellAreaSelectingMouseMovingEventHandlers();
+
+		console.log("mouseup");
+		
+		event.stopPropagation();
+	});
+	
+	$(".table .cell .atom.text.simple input").on("mouseover", function(event) {
+        var textInput = $(this);
+        var tableElement = textInput.closest(".table");
+        //textInput.addClass("highlighted");
+
+        var startCellRowIndex = Table.getRowIndexOfTableCell(Table.mouseDownTextInput);
+        var startCellColumnIndex = Table.getColumnIndexOfTableCell(Table.mouseDownTextInput);
+        var endCellRowIndex = Table.getRowIndexOfTableCell(textInput);
+        var endCellColumnIndex = Table.getColumnIndexOfTableCell(textInput);
+        
+        if (endCellRowIndex < startCellRowIndex) {
+        	var temp = startCellRowIndex;
+        	startCellRowIndex = endCellRowIndex;
+        	endCellRowIndex = temp;
+        }
+        if (endCellColumnIndex < startCellColumnIndex) {
+        	var temp = startCellColumnIndex;
+        	startCellColumnIndex = endCellColumnIndex;
+        	endCellColumnIndex = temp;
+        }
+        
+        for (var rowIndex = startCellRowIndex; rowIndex <= endCellRowIndex; rowIndex++) {
+        	for (var columnIndex = startCellColumnIndex; columnIndex <= endCellColumnIndex; columnIndex++) {
+            	var textIndexByCoordinate = Table.getTableCellTextInputByCoordinates(tableElement, rowIndex, columnIndex);
+            	textIndexByCoordinate.addClass("to_be_highlighted");
+            }
+        }
+        
+        tableElement.find(".cell input.highlighted").not(".to_be_highlighted").removeClass("highlighted");
+        tableElement.find(".cell input.to_be_highlighted").addClass("highlighted");
+        tableElement.find(".cell input.to_be_highlighted").removeClass("to_be_highlighted");
+        
+
+		console.log("mouseover");
+        
+	});
+},
+
+tearDownCellAreaSelectingMouseMovingEventHandlers: function() {
+	$(window).off("mousemove");
+	$(window).off("mouseup");
+	$(".table .cell .atom.text.simple input").off("mouseover");
+},
+
+initializeMenuEventHandlers: function() {
+	$(".table .header .cell").on("contextmenu", function(event) {
+		var headerCellElement = $(this);
+		
+		var optionList = [
+			"Rename", 
+			"Insert (Left)", 
+			"Insert (Right)", 
+			"Delete"
+		];
+		var popupElement = Table.buildPopup(optionList);
+		
+		var targetX = event.clientX - headerCellElement.offset().left;
+		var targetY = event.clientY - headerCellElement.offset().top;
+		popupElement.css("left", targetX.toString() + "px");
+		popupElement.css("top", targetY.toString() + "px");
+		
+		$(".table .header .cell .popupSelection").remove();
+		
+		headerCellElement.append(popupElement);
+		
+		popupElement.find(".option").on("click", function(event) {
+			Table.tableHeaderCellPopupSelectionOptionClickEventHandler(event);
+		});
+		popupElement.find(".option").on("contextmenu", function(event) {
+			event.stopPropagation();
+			event.preventDefault();
+		});
+		
+		event.stopPropagation();
+		event.preventDefault();
+	});
+},
+
+tableHeaderCellPopupSelectionOptionClickEventHandler: function(event) {
+	var optionElement = $(event.target).closest(".option");
+	var popupElement = optionElement.closest(".popupSelection");
+	var headerCellElement = popupElement.closest(".table .header .cell");
+	var optionText = optionElement.find("span").html();
+	popupElement.remove();
+	
+	if (optionText == "Rename") {
+		Table.renameColumn(headerCellElement);
+	} else if (optionText == "Insert (Left)") {
+		Table.copyColumnAndPasteToLeftByHeaderCell(headerCellElement);
+	} else if (optionText == "Insert (Right)") {
+		Table.copyColumnAndPasteToRightByHeaderCell(headerCellElement);
+	} else if (optionText == "Delete") {
+		Table.deleteColumnByHeaderCell(headerCellElement);
+	} 
+},
+
+focusPreviousTextInputInTable: function(currentTextInput) {
+	Table.focusAdjacentTextInputInTable(currentTextInput, -1);
+},
+
+focusNextTextInputInTable: function(currentTextInput) {
+	Table.focusAdjacentTextInputInTable(currentTextInput, 1);
+},
+
+focusAdjacentTextInputInTable: function(currentTextInput, offset) {
+    currentTextInput = $(currentTextInput);
+    var tableElement = currentTextInput.closest(".table");
+    var textInputList = tableElement.find("input");
+    
+    var currentTextInputIndex = Table.getIndexOfElementInCollection(textInputList, currentTextInput);
+    var adjacentTextInput = textInputList.eq(currentTextInputIndex + offset);
+
+    adjacentTextInput.select();
+    
+    Table.isCurrentlyMovingCellByKey = true;
+},
+
+focusAboveTextInputInTable: function(currentTextInput) {
+	Table.focusVerticallyAdjacentTextInputInTable(currentTextInput, -1);
+},
+
+focusBelowTextInputInTable: function(currentTextInput) {
+	Table.focusVerticallyAdjacentTextInputInTable(currentTextInput, 1);
+},
+
+focusVerticallyAdjacentTextInputInTable: function(currentTextInput, offset) {
+    currentTextInput = $(currentTextInput);
+    var currentRow = currentTextInput.closest(".row");
+    
+    var inputInCurrentRowList = currentRow.find("input");
+    var currentTextInputInRowIndex = Table.getIndexOfElementInCollection(inputInCurrentRowList, currentTextInput);
+    
+	var verticallyAdjacentRow = (offset == 1 ? currentRow.next(".row") : currentRow.prev(".row"));
+	var targetInput = verticallyAdjacentRow.find("input").eq(currentTextInputInRowIndex);
+	targetInput.select();
+	
+	Table.isCurrentlyMovingCellByKey = true;
+},
+
+getIndexOfElementInCollection: function(collection, element) { // TODO: Use jQuery.index() ?
+	var result = null;
+	collection.each(function(index) {
+    	if (element.get(0) === $(this).get(0)) {
+    		result = index;
+    	}
+    });
+    return result;
+},
+
+
+/**************** Table ****************/ 
+
+buildTableFromData: function(data) {
+	
+	var tableElement = $("<div></div>");
+	tableElement.addClass("table");
+	
+	var columnMetaData = Table.getColumnMetaDataFromData(data);
+	
+	var headerElement = Table.buildHeader(columnMetaData);
+	tableElement.append(headerElement);
+
+	var templateRowElement = Table.buildTemplateRow(columnMetaData);
+	
+	data.forEach(record => {
+		var rowElement = Table.populateTemplateRow(record, templateRowElement);
+		tableElement.append(rowElement);
+	});
+	
+	var footerElement = Table.buildFooter();
+	tableElement.append(footerElement);
+	
+	return tableElement;
+},
+
+getColumnMetaDataFromData: function(data) {
+	var columnMetaData = [];
+	var record = data[0];
+	for (field in record) {
+		var value = record[field];
+		columnMetaData.push(field);
+	}
+	return columnMetaData;
+},
+
+buildHeader: function(columnMetaData) {
+	var headerElement = $("<div></div>");
+	headerElement.addClass("header");
+	
+	columnMetaData.forEach(column => {
+		var cellElement = $("<div></div>");
+		cellElement.addClass("cell");
+
+		var spanElement = $("<span></span>");
+		spanElement.html(column);
+		
+		cellElement.append(spanElement);
+		
+		headerElement.append(cellElement);
+	});
+	
+	return headerElement;
+},
+
+buildTemplateRow: function(columnMetaData) {
+	var rowElement = $("<div></div>");
+	rowElement.addClass("row");
+	
+	columnMetaData.forEach(column => {
+		var cellElement = $("<div></div>");
+		cellElement.addClass("cell");
+		
+		var atomElement = $("<div></div>");
+		atomElement.addClass("atom");
+		atomElement.addClass("text");
+		atomElement.addClass("simple");
+		
+		atomElement.attr("data-source", column);
+		
+		cellElement.append(atomElement);
+		
+		var inputElement = $("<input/>");
+		inputElement.attr("type", "text");
+		inputElement.attr("value", "ABC123");
+		
+		atomElement.append(inputElement);
+		
+		rowElement.append(cellElement);
+	});
+	
+	var deleteCellElement = $("<div></div>");
+	deleteCellElement.addClass("cell");
+	deleteCellElement.addClass("delete");
+	
+	var deleteButtonElement = $("<div></div>");
+	deleteButtonElement.addClass("atom");
+	deleteButtonElement.addClass("button");
+	deleteButtonElement.addClass("delete");
+	
+	var deleteButtonSpanElement = $("<span></span>");
+	deleteButtonSpanElement.html("x");
+	
+	deleteButtonElement.append(deleteButtonSpanElement);
+
+	deleteCellElement.append(deleteButtonElement);
+	
+	rowElement.append(deleteCellElement);
+	
+	return rowElement;
+},
+
+buildFooter: function() {
+	var footerElement = $("<div></div>");
+	footerElement.addClass("footer");
+	
+	var addCellElement = $("<div></div>");
+	addCellElement.addClass("cell");
+	addCellElement.addClass("add");
+	
+	var addButtonElement = $("<div></div>");
+	addButtonElement.addClass("atom");
+	addButtonElement.addClass("button");
+	addButtonElement.addClass("add");
+	
+	var addButtonSpanElement = $("<span></span>");
+	addButtonSpanElement.html("+");
+	
+	addButtonElement.append(addButtonSpanElement);
+
+	addCellElement.append(addButtonElement);
+	
+	footerElement.append(addCellElement);
+
+	return footerElement;
+},
+
+populateTemplateRow: function(record, templateRowElement) {
+	var rowElement = templateRowElement.clone();
+
+	for (field in record) {
+		var value = record[field];
+		
+		var atomElement = rowElement.find(".atom[data-source='" + field + "']");
+		var inputElement = atomElement.find("input");
+		
+		inputElement.attr("value", value);
+	}
+	
+	return rowElement;
+},
+
+renameColumn: function(headerCellElement) {
+	var currentColumnName = headerCellElement.find("span").html();
+	var newColumnName = prompt("Rename Column:", currentColumnName);
+	if (newColumnName == null) {
+		return;
+	}
+	headerCellElement.find("span").html(newColumnName);
+},
+
+copyColumnAndPasteToLeftByHeaderCell: function(headerCellElement) {
+	Table.copyColumnAndPasteToSideByHeaderCell(headerCellElement, false);
+},
+
+copyColumnAndPasteToRightByHeaderCell: function(headerCellElement) {
+	Table.copyColumnAndPasteToSideByHeaderCell(headerCellElement, true);
+},
+
+copyColumnAndPasteToSideByHeaderCell: function(headerCellElement, toRight) {
+	var columnIndex = headerCellElement.index();
+	var tableElement = headerCellElement.closest(".table");
+	var headerElement = headerCellElement.closest(".header");
+	var tableRowElementList = tableElement.find(".row");
+	
+	var newHeaderCellElement = headerCellElement.clone();
+	var currentColumnName = headerCellElement.find("span").html();
+	var newColumnName = Table.getUniqueColumnName(tableElement, currentColumnName);
+	newHeaderCellElement.find("span").html(newColumnName);
+	if (!toRight) {
+		newHeaderCellElement.insertBefore(headerCellElement);
+	} else {
+		newHeaderCellElement.insertAfter(headerCellElement);
+	}
+	
+	tableRowElementList.each(function(index) {
+		var tableRowElement = $(this);
+		var cellElement = tableRowElement.find(".cell").eq(columnIndex);
+		var newCellElement = cellElement.clone();
+		if (!toRight) {
+			newCellElement.insertBefore(cellElement);
+		} else {
+			newCellElement.insertAfter(cellElement);
+		}
+    });
+
+    Table.initializeEventHandlers();
+},
+
+getUniqueColumnName: function(tableElement, baseColumnName) {
+	var headerElement = tableElement.find(".header");
+	var headerCellElementList = headerElement.find(".cell");
+	
+	var existingColumnNameList = [];
+	headerCellElementList.each(function(index) {
+		var headerCellElement = $(this);
+		var columnName = headerCellElement.find("span").html();
+		existingColumnNameList.push(columnName);
+    });
+	
+	if (!existingColumnNameList.includes(baseColumnName)) {
+		return baseColumnName;
+	}
+	
+	var index = 2;
+	var probeColumnName = baseColumnName + " " + index;
+	while (existingColumnNameList.includes(probeColumnName)) {
+		index++;
+		probeColumnName = baseColumnName + " " + index;
+	}
+	return probeColumnName;
+},
+
+deleteColumnByHeaderCell: function(headerCellElement) {
+	var columnIndex = headerCellElement.index();
+	var tableElement = headerCellElement.closest(".table");
+	var headerElement = headerCellElement.closest(".header");
+	var tableRowElementList = tableElement.find(".row");
+	
+	headerElement.find(".cell").eq(columnIndex).remove();
+	tableRowElementList.each(function(index) {
+		var tableRowElement = $(this);
+		tableRowElement.find(".cell").eq(columnIndex).remove();
+    });
+},
+
+getTableDataAsJson: function(tableElement) {
+	var jsonData = [];
+	
+	var indexToColumnNameMap = {};
+	var headerRowElement = tableElement.find(".header");
+	var headerCellElementList = headerRowElement.find(".cell");
+	headerCellElementList.each(function(index) {
+		var headerCellElement = $(this);
+		var headerCellSpanElement = headerCellElement.find("span");
+		var columnName = headerCellSpanElement.html();
+		indexToColumnNameMap[index] = columnName;
+	});
+	
+	var tableRowElementList = tableElement.find(".row");
+	
+	tableRowElementList.each(function(index) {
+		var tableRowElement = $(this);
+		
+		var record = new Object();
+		
+		var cellElementList = tableRowElement.find(".cell");
+		
+		cellElementList.each(function(index) {
+			var cellElement = $(this);
+			
+			var inputElement = cellElement.find("input");
+			
+			if (inputElement.length > 0) {
+				var data = inputElement.val();
+				var columnName = indexToColumnNameMap[index];
+				record[columnName] = data;
+			}
+	    });
+		
+		jsonData.push(record);
+    });
+	
+	return jsonData;
+},
+
+/******** Highlight ********/
+
+getStringOfHighlightedCells: function(tableElement) {
+	var result = "";
+	var highlightedTextInputList = tableElement.find(".cell input.highlighted");
+	if (highlightedTextInputList.length == 0) {
+		var focusedTextInput = tableElement.find(".cell input:focus");
+		return focusedTextInput.val();
+	}
+	highlightedTextInputList.each(function(index) {
+		var highlightedTextInput = $(this);
+		var highlightedTextInputValue = highlightedTextInput.val();
+		if (result != "") {
+			var currentCellRow = highlightedTextInput.closest(".row");
+			var previousHighlightedTextInput = highlightedTextInputList.eq(index - 1);
+			var previousCellRow = previousHighlightedTextInput.closest(".row");
+			result += (currentCellRow.is(previousCellRow) ? "\t" : "\n")
+		}
+		result += highlightedTextInputValue;
+    });
+	result += "\n"
+	return result;
+},
+
+paste: function(tableElement, clipboardText) {
+	var startTextInput = tableElement.find(".cell input:focus");
+	if (startTextInput.length == 0) {
+		startTextInput = tableElement.find(".cell input.highlighted").first();
+	}
+	if (startTextInput.length == 0) {
+		return;	
+	}
+	if (!clipboardText.includes("\t") && !clipboardText.includes("\n")) {
+		Table.pasteAccordingToHighlight(tableElement, clipboardText);
+	} else {
+		Table.pasteAccordingToClipboard(tableElement, clipboardText, startTextInput);
+	}
+},
+
+pasteAccordingToHighlight: function(tableElement, clipboardText) {
+	var focusedTextInput = tableElement.find(".cell input:focus");
+	if (focusedTextInput.length > 0) {
+		focusedTextInput.val(clipboardText);
+	} else {
+		tableElement.find(".cell input.highlighted").val(clipboardText);
+	}
+},
+
+pasteAccordingToClipboard: function(tableElement, clipboardText, startTextInput) {
+	var startRowIndex = Table.getRowIndexOfTableCell(startTextInput);
+	var startColumnIndex = Table.getColumnIndexOfTableCell(startTextInput);
+	var rowIndex = startRowIndex;
+	var columnIndex = startColumnIndex;
+	
+	var remainingText = clipboardText;
+	
+	while (remainingText != "") {
+		var nextTabIndex = remainingText.indexOf("\t");
+		var nextNewlineIndex = remainingText.indexOf("\n");
+		var nextMarkIndex = (nextTabIndex >= 0 && nextTabIndex < nextNewlineIndex ? nextTabIndex : nextNewlineIndex);
+		var subText = remainingText.substring(0, nextMarkIndex);
+		remainingText = remainingText.substring(nextMarkIndex + 1);
+		
+		var textInput = Table.getTableCellTextInputByCoordinates(tableElement, rowIndex, columnIndex);
+		textInput.val(subText);
+		
+		if (nextMarkIndex == nextTabIndex) { // Tab
+			columnIndex++;
+		} else { // Newline
+			rowIndex++;
+			columnIndex = startColumnIndex;
+		}
+	}
+},
+
+/******** Coordinates ********/
+
+getRowIndexOfTableCell: function(cellElement) {
+	cellElement = $(cellElement).closest(".cell");
+	var rowElement = cellElement.closest(".row");
+	var tableElement = rowElement.closest(".table");
+	var tableRowElementList = tableElement.find(".row");
+	return tableRowElementList.index(rowElement);
+},
+
+getColumnIndexOfTableCell: function(cellElement) {
+	cellElement = $(cellElement).closest(".cell");
+	var rowElement = cellElement.closest(".row");
+	var rowCellElementList = rowElement.find(".cell");
+	return rowCellElementList.index(cellElement);
+},
+
+getTableCellByCoordinates: function(tableElement, rowIndex, columnIndex) {
+	var rowElement = tableElement.find(".row").eq(rowIndex);
+	var cellElement = rowElement.find(".cell").eq(columnIndex);
+	return cellElement;
+},
+
+getTableCellTextInputByCoordinates: function(tableElement, rowIndex, columnIndex) {
+	return Table.getTableCellByCoordinates(tableElement, rowIndex, columnIndex).find("input");
+},
+
+/**************** End: Table ****************/
+
+/**************** Popup ****************/
+
+buildPopup: function(optionList) {
+	var popupElement = $("<div></div>");
+	popupElement.addClass("popupSelection");
+	
+	optionList.forEach(option => {
+		var optionElement = $("<div></div>");
+		optionElement.addClass("option");
+
+		var optionSpanElement = $("<span></span>");
+		optionSpanElement.html(option);
+		
+		optionElement.append(optionSpanElement);
+		
+		popupElement.append(optionElement);
+	});
+	
+	return popupElement;
+}
+
+/**************** End: Popup ****************/
+
+}
+
+</script>
+
+</head>
+<body>
+
+<div class="container vertical dynamicTableContainer">
+
+</div>
+
+</body>
+</html>
